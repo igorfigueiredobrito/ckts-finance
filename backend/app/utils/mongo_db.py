@@ -32,26 +32,54 @@ class MongoHelper:
 # Instância global do MongoDB
 mongo_instance = MongoHelper()
 
-def registrar_auditoria(acao: str, tabela: str, registro_id: int, usuario_id: int):
-    """
-    Registra no MongoDB as ações Críticas do sistema.
-    :param acao: 'INCLUSAO', 'ALTERACAO' ou 'EXCLUSAO'
-    :param tabela: Nome da tabela no MySQL afetada
-    :param registro_id: ID do registro afetado
-    :param usuario_id: ID do usuário que realizou a ação
-    """
+from flask import request, has_request_context
+
+def _inserir_log(collection_name: str, acao: str, detalhes: dict, usuario: str = None, tabela: str = None, registro_id: int = None):
+    ip = None
+    user_agent = None
+    
+    if has_request_context():
+        ip = request.remote_addr
+        user_agent = request.user_agent.string
+        
+    documento = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "usuario": usuario,
+        "acao": acao,
+        "tabela": tabela,
+        "registro_id": registro_id,
+        "detalhes": detalhes,
+        "ip": ip,
+        "user_agent": user_agent
+    }
+    
     try:
         db = mongo_instance.get_db()
-        documento = {
-            "acao": acao.upper(),
-            "tabela": tabela,
-            "registro_id": registro_id,
-            "usuario_id": usuario_id,
-            "timestamp": datetime.now(timezone.utc)
-        }
-        # Salva na coleção (tabela NoSQL) 'auditoria_logs'
-        db.auditoria_logs.insert_one(documento)
+        db[collection_name].insert_one(documento)
     except Exception as e:
-        # Em um sistema real, falhas de log não devem quebrar a ação principal, 
-        # mas devem gerar alertas em ferramentas como Sentry/Datadog.
-        print(f"Erro Crítico: Falha ao salvar log de auditoria no MongoDB: {e}")
+        print(f"Erro Crítico: Falha ao salvar log '{acao}' na coleção '{collection_name}': {e}")
+
+def registrar_login(usuario: str, ip: str, sucesso: bool):
+    detalhes = {
+        "sucesso_fracasso": "sucesso" if sucesso else "fracasso"
+    }
+    _inserir_log("login_logs", "LOGIN", detalhes, usuario=usuario)
+
+def registrar_inclusao(tabela: str, registro_id: int, dados_inseridos: dict, usuario: str):
+    detalhes = {
+        "dados_inseridos": dados_inseridos
+    }
+    _inserir_log("auditoria_logs", "INSERT", detalhes, usuario=usuario, tabela=tabela, registro_id=registro_id)
+
+def registrar_alteracao(tabela: str, registro_id: int, antes: dict, depois: dict, usuario: str):
+    detalhes = {
+        "antes": antes,
+        "depois": depois
+    }
+    _inserir_log("auditoria_logs", "UPDATE", detalhes, usuario=usuario, tabela=tabela, registro_id=registro_id)
+
+def registrar_exclusao(tabela: str, registro_id: int, dados_excluidos: dict, usuario: str):
+    detalhes = {
+        "dados_excluidos": dados_excluidos
+    }
+    _inserir_log("auditoria_logs", "DELETE", detalhes, usuario=usuario, tabela=tabela, registro_id=registro_id)

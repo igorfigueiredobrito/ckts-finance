@@ -13,10 +13,16 @@ class CategoriaDAO(InterfaceDAO):
             cursor.execute(sql, (data.get('nome'), data.get('tipo'), data.get('usuario_id')))
             return cursor.lastrowid
 
-    def ler(self, id: int) -> Optional[dict]:
+    def ler(self, id: int, **kwargs) -> Optional[dict]:
+        usuario_id = kwargs.get('usuario_id')
         sql = "SELECT id, nome, tipo, usuario_id FROM categorias WHERE id = %s"
+        params = [id]
+        if usuario_id:
+            sql += " AND usuario_id = %s"
+            params.append(usuario_id)
+            
         with self.db.cursor() as cursor:
-            cursor.execute(sql, (id,))
+            cursor.execute(sql, tuple(params))
             return cursor.fetchone()
 
     def atualizar(self, id: int, data: dict) -> bool:
@@ -25,10 +31,16 @@ class CategoriaDAO(InterfaceDAO):
             affected = cursor.execute(sql, (data.get('nome'), data.get('tipo'), id, data.get('usuario_id')))
             return affected > 0
 
-    def deletar(self, id: int, usuario_id: int) -> bool:
-        sql = "DELETE FROM categorias WHERE id = %s AND usuario_id = %s"
+    def deletar(self, id: int, **kwargs) -> bool:
+        usuario_id = kwargs.get('usuario_id')
+        sql = "DELETE FROM categorias WHERE id = %s"
+        params = [id]
+        if usuario_id:
+            sql += " AND usuario_id = %s"
+            params.append(usuario_id)
+            
         with self.db.cursor() as cursor:
-            affected = cursor.execute(sql, (id, usuario_id))
+            affected = cursor.execute(sql, tuple(params))
             return affected > 0
 
     def listar(self, **kwargs) -> List[dict]:

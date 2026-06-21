@@ -14,7 +14,7 @@
           <TrendingUpIcon class="stat-icon text-primary" size="20" />
         </div>
         <div class="stat-body">
-          <h2 class="stat-value text-primary">R$ {{ totalReceitas.toFixed(2) }}</h2>
+          <h2 class="stat-value text-primary">R$ {{ formatCurrency(displayReceitas) }}</h2>
           <span class="stat-desc">Receita bruta acumulada</span>
         </div>
       </div>
@@ -25,7 +25,7 @@
           <TrendingDownIcon class="stat-icon text-danger" size="20" />
         </div>
         <div class="stat-body">
-          <h2 class="stat-value text-danger">R$ {{ totalDespesas.toFixed(2) }}</h2>
+          <h2 class="stat-value text-danger">R$ {{ formatCurrency(displayDespesas) }}</h2>
           <span class="stat-desc">Gastos e saídas</span>
         </div>
       </div>
@@ -36,8 +36,36 @@
           <WalletIcon class="stat-icon text-text-main" size="20" />
         </div>
         <div class="stat-body">
-          <h2 class="stat-value">R$ {{ (totalReceitas - totalDespesas).toFixed(2) }}</h2>
+          <h2 class="stat-value">R$ {{ formatCurrency(displaySaldo) }}</h2>
           <span class="stat-desc">Caixa disponível</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Seção Admin -->
+    <div v-if="isAdmin" class="admin-stats-section mt-4 mb-4">
+      <h3 class="section-title">Métricas da Plataforma (Admin)</h3>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-header">
+            <span class="stat-title">Total de Usuários</span>
+            <UsersIcon class="stat-icon text-primary" size="20" />
+          </div>
+          <div class="stat-body">
+            <h2 class="stat-value">{{ Math.floor(displayTotalUsuarios).toLocaleString('pt-BR') }}</h2>
+            <span class="stat-desc">Cadastrados no sistema</span>
+          </div>
+        </div>
+        
+        <div class="stat-card">
+          <div class="stat-header">
+            <span class="stat-title">Receita Recorrente (MRR)</span>
+            <ActivityIcon class="stat-icon text-primary" size="20" />
+          </div>
+          <div class="stat-body">
+            <h2 class="stat-value text-primary">R$ {{ formatCurrency(displayMrr) }}</h2>
+            <span class="stat-desc">Estimativa mensal em assinaturas</span>
+          </div>
         </div>
       </div>
     </div>
@@ -47,7 +75,7 @@
       <h3>Módulos de Gerenciamento</h3>
       
       <div class="modules-grid">
-        <router-link to="/transacoes" class="module-card">
+        <router-link to="/app/transacoes" class="module-card">
           <ReceiptIcon size="24" class="module-icon" />
           <div class="module-content">
             <h4>Transações</h4>
@@ -55,7 +83,7 @@
           </div>
         </router-link>
 
-        <router-link to="/graficos" class="module-card">
+        <router-link to="/app/graficos" class="module-card">
           <PieChartIcon size="24" class="module-icon" />
           <div class="module-content">
             <h4>Análise e Gráficos</h4>
@@ -63,7 +91,7 @@
           </div>
         </router-link>
 
-        <router-link to="/data" class="module-card">
+        <router-link to="/app/data" class="module-card">
           <DownloadCloudIcon size="24" class="module-icon" />
           <div class="module-content">
             <h4>Importar/Exportar</h4>
@@ -85,25 +113,85 @@ import {
   WalletIcon,
   ReceiptIcon,
   PieChartIcon,
-  DownloadCloudIcon
+  DownloadCloudIcon,
+  UsersIcon,
+  ActivityIcon
 } from 'lucide-vue-next';
 
 const totalReceitas = ref(0);
 const totalDespesas = ref(0);
+const isAdmin = ref(false);
+const adminStats = ref({});
+
+const displayReceitas = ref(0);
+const displayDespesas = ref(0);
+const displaySaldo = ref(0);
+const displayTotalUsuarios = ref(0);
+const displayMrr = ref(0);
+
+const formatCurrency = (val) => {
+  return val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
+const animateValue = (targetRef, targetValue, duration = 1200) => {
+  let startTimestamp = null;
+  const step = (timestamp) => {
+    if (!startTimestamp) startTimestamp = timestamp;
+    const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+    
+    // easeOutQuart para uma animação suave que desacelera no final
+    const easeProgress = 1 - Math.pow(1 - progress, 4);
+    
+    targetRef.value = easeProgress * targetValue;
+    
+    if (progress < 1) {
+      window.requestAnimationFrame(step);
+    } else {
+      targetRef.value = targetValue;
+    }
+  };
+  window.requestAnimationFrame(step);
+};
 
 onMounted(async () => {
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  if (user.role === 'admin') {
+    isAdmin.value = true;
+    try {
+      const resStats = await api.get('/admin/stats');
+      adminStats.value = resStats.data;
+      
+      // Anima os números de admin
+      animateValue(displayTotalUsuarios, resStats.data.total_usuarios || 0);
+      animateValue(displayMrr, resStats.data.mrr_estimado || 0);
+    } catch (e) {
+      console.error('Erro ao buscar métricas de admin', e);
+    }
+  }
+
   try {
     const response = await api.get('/transacoes');
     const transacoes = response.data;
     
+    let tempReceitas = 0;
+    let tempDespesas = 0;
+    
     transacoes.forEach(t => {
       const valor = parseFloat(t.valor);
       if (t.categoria_tipo === 'receita') {
-        totalReceitas.value += valor;
+        tempReceitas += valor;
       } else if (t.categoria_tipo === 'despesa') {
-        totalDespesas.value += valor;
+        tempDespesas += valor;
       }
     });
+    
+    totalReceitas.value = tempReceitas;
+    totalDespesas.value = tempDespesas;
+    
+    // Anima os números das transações
+    animateValue(displayReceitas, tempReceitas);
+    animateValue(displayDespesas, tempDespesas);
+    animateValue(displaySaldo, tempReceitas - tempDespesas);
 
   } catch (error) {
     console.error("Erro ao processar dados do Dashboard", error);
@@ -240,5 +328,20 @@ onMounted(async () => {
   font-size: 0.85rem;
   color: var(--text-muted);
   line-height: 1.4;
+}
+
+.mt-4 {
+  margin-top: 2rem;
+}
+
+.mb-4 {
+  margin-bottom: 2rem;
+}
+
+.section-title {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin-bottom: 1.25rem;
+  color: var(--text-main);
 }
 </style>

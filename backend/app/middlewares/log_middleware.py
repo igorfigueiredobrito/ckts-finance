@@ -21,6 +21,7 @@ def register_log_middleware(app):
             return response
             
         try:
+            from app.utils.mongo_db import _inserir_log
             # Calcula o tempo total em milissegundos
             process_time = time.time() - g.start_time
             process_time_ms = round(process_time * 1000, 2)
@@ -28,19 +29,15 @@ def register_log_middleware(app):
             # O auth_middleware deve popular o 'usuario_id' no contexto 'g' se houver login
             usuario_id = getattr(g, 'usuario_id', None)
             
-            log_data = {
+            detalhes = {
                 "endpoint": request.path,
-                "method": request.method,
-                "usuario_id": usuario_id,
-                "timestamp": datetime.now(timezone.utc),
-                "ip": request.remote_addr,
+                "metodo": request.method,
                 "status_code": response.status_code,
-                "response_time_ms": process_time_ms
+                "tempo_resposta": process_time_ms
             }
             
-            # Insere no MongoDB na coleção 'request_logs'
-            db = mongo_instance.get_db()
-            db.request_logs.insert_one(log_data)
+            # Insere no MongoDB usando o padrao de log
+            _inserir_log("request_logs", "ACCESS", detalhes, usuario=str(usuario_id) if usuario_id else None)
             
         except Exception as e:
             print(f"Erro Crítico: Falha ao registrar log da requisição no MongoDB: {e}")

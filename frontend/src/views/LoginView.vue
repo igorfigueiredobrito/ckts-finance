@@ -82,8 +82,8 @@ const handleLogin = async () => {
     localStorage.setItem('token', response.data.token);
     localStorage.setItem('user', JSON.stringify(response.data.usuario));
     
-    // Redireciona
-    router.push('/');
+    // Redireciona direto para o Dashboard
+    router.push('/app');
   } catch (err) {
     erro.value = err.response?.data?.mensagem || 'Erro ao conectar. Tente novamente.';
   } finally {

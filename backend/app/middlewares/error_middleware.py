@@ -25,21 +25,19 @@ def register_error_handlers(app):
         stack_trace = traceback.format_exc()
 
         try:
+            from app.utils.mongo_db import _inserir_log
             # Tenta identificar o usuário se o erro ocorreu numa rota autenticada
             usuario_id = getattr(g, 'usuario_id', None)
             
-            error_doc = {
-                "endpoint": request.path,
-                "method": request.method,
-                "usuario_id": usuario_id,
-                "error_message": str(e),
+            detalhes = {
+                "erro": str(e),
                 "stack_trace": stack_trace,
-                "timestamp": datetime.now(timezone.utc)
+                "endpoint": request.path,
+                "metodo": request.method
             }
             
-            # Salva na coleção 'error_logs'
-            db = mongo_instance.get_db()
-            db.error_logs.insert_one(error_doc)
+            # Delega para a nova estrutura de log padronizada
+            _inserir_log("error_logs", "ERROR", detalhes, usuario=str(usuario_id) if usuario_id else None)
             
         except Exception as mongo_err:
             print(f"Falha gravíssima: O log de erro não pôde ser gravado. Motivo: {mongo_err}")

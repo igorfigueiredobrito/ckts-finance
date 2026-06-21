@@ -28,17 +28,19 @@ class DatabaseHelper:
         self.password = os.getenv('DB_PASSWORD', '')
         self.database = os.getenv('DB_NAME', 'finance_system')
         self.port = int(os.getenv('DB_PORT', 3306))
-        self.connection = None
+        
+        import threading
+        self.local = threading.local()
 
     def get_connection(self):
         """
         Retorna a conexão ativa com o banco.
-        Se a conexão estiver fechada ou inexistente, cria uma nova.
+        Se a conexão estiver fechada ou inexistente para a thread atual, cria uma nova.
         """
-        # Verifica se não temos conexão ou se a existente caiu
-        if not self.connection or not self.connection.open:
+        # Verifica se não temos conexão ou se a existente caiu nesta thread
+        if not hasattr(self.local, 'connection') or not self.local.connection.open:
             try:
-                self.connection = pymysql.connect(
+                self.local.connection = pymysql.connect(
                     host=self.host,
                     user=self.user,
                     password=self.password,
@@ -52,10 +54,10 @@ class DatabaseHelper:
                 raise e
         else:
             try:
-                self.connection.ping(reconnect=True)
+                self.local.connection.ping(reconnect=True)
             except Exception as e:
                 print(f"Erro ao pingar BD: {e}")
-        return self.connection
+        return self.local.connection
 
 # Instanciamos o Helper que será importado pelas classes DAO
 db_instance = DatabaseHelper()

@@ -1,48 +1,61 @@
 from flask import Blueprint
 from app.controllers.usuario_controller import UsuarioController
-from app.middlewares.validator_middleware import validate_schema
+from app.middlewares.validation_middleware import validate_schema
 from app.middlewares.auth_middleware import jwt_required
 
-bp_usuarios = Blueprint('usuarios', __name__, url_prefix='/api/usuarios')
-controller = UsuarioController()
+class UsuarioRouter:
+    """
+    Classe de Router para Usuários.
+    Agrupa as rotas e associa aos métodos do UsuarioController,
+    sem conter nenhuma regra de negócio.
+    """
+    def __init__(self):
+        self.bp = Blueprint('usuarios', __name__, url_prefix='/api/usuarios')
+        self.controller = UsuarioController()
+        self._register_routes()
 
-@bp_usuarios.route('/registrar', methods=['POST'])
-@validate_schema({
-    "nome": str,
-    "email": str,
-    "senha": str,
-    "foto_perfil": str
-})
-def registrar():
-    """
-    Rota Pública para Registro de Usuários.
-    Usa o middleware de validação para garantir a integridade do JSON.
-    """
-    return controller.registrar()
+    def _register_routes(self):
+        # /registrar
+        schema_registro = {
+            "nome": str,
+            "email": str,
+            "senha": str,
+            "telefone": str,
+            "cpf": str,
+            "data_nascimento": str,
+            "foto_perfil": (str, type(None))
+        }
+        self.bp.add_url_rule(
+            '/registrar', 
+            view_func=validate_schema(schema_registro)(self.controller.registrar), 
+            methods=['POST']
+        )
+        
+        # /login
+        schema_login = {
+            "email": str,
+            "senha": str
+        }
+        self.bp.add_url_rule(
+            '/login', 
+            view_func=validate_schema(schema_login)(self.controller.login), 
+            methods=['POST']
+        )
+        
+        # /upload-foto
+        self.bp.add_url_rule(
+            '/upload-foto', 
+            view_func=self.controller.upload_foto, 
+            methods=['POST']
+        )
+        
+        # /perfil
+        self.bp.add_url_rule(
+            '/perfil', 
+            view_func=jwt_required(self.controller.atualizar_perfil), 
+            methods=['PUT']
+        )
 
-@bp_usuarios.route('/login', methods=['POST'])
-@validate_schema({
-    "email": str,
-    "senha": str
-})
-def login():
-    """
-    Rota Pública para Login (Geração do Token JWT).
-    """
-    return controller.login()
-
-@bp_usuarios.route('/upload-foto', methods=['POST'])
-def upload_foto():
-    """
-    Recebe imagem via Form-Data e salva fisicamente no backend, 
-    retornando a URL gerada para ser enviada no Cadastro.
-    """
-    return controller.upload_foto()
-
-@bp_usuarios.route('/perfil', methods=['PUT'])
-@jwt_required
-def atualizar_perfil():
-    """
-    Atualiza os dados do usuário logado (nome, email, senha e foto).
-    """
-    return controller.atualizar_perfil()
+# Instância que será importada pelo __init__.py
+usuario_router = UsuarioRouter()
+bp_usuarios = usuario_router.bp

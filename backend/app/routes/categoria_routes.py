@@ -1,32 +1,43 @@
 from flask import Blueprint
 from app.controllers.categoria_controller import CategoriaController
 from app.middlewares.auth_middleware import jwt_required
-from app.middlewares.validator_middleware import validate_schema
+from app.middlewares.validation_middleware import validate_schema
 
-bp_categorias = Blueprint('categorias', __name__, url_prefix='/api/categorias')
-controller = CategoriaController()
-
-@bp_categorias.route('', methods=['GET'])
-@jwt_required
-def listar():
+class CategoriaRouter:
     """
-    Rota para listar todas as categorias do usuário logado.
+    Classe de Router para Categorias.
     """
-    return controller.listar()
+    def __init__(self):
+        self.bp = Blueprint('categorias', __name__, url_prefix='/api/categorias')
+        self.controller = CategoriaController()
+        self._register_routes()
 
-@bp_categorias.route('', methods=['POST'])
-@jwt_required
-@validate_schema({ "nome": str, "tipo": str })
-def criar():
-    return controller.criar()
+    def _register_routes(self):
+        schema_categoria = { "nome": str, "tipo": str }
+        
+        self.bp.add_url_rule(
+            '', 
+            view_func=jwt_required(self.controller.listar), 
+            methods=['GET']
+        )
+        
+        self.bp.add_url_rule(
+            '', 
+            view_func=jwt_required(validate_schema(schema_categoria)(self.controller.criar)), 
+            methods=['POST']
+        )
+        
+        self.bp.add_url_rule(
+            '/<int:id>', 
+            view_func=jwt_required(validate_schema(schema_categoria)(self.controller.atualizar)), 
+            methods=['PUT']
+        )
+        
+        self.bp.add_url_rule(
+            '/<int:id>', 
+            view_func=jwt_required(self.controller.deletar), 
+            methods=['DELETE']
+        )
 
-@bp_categorias.route('/<int:id>', methods=['PUT'])
-@jwt_required
-@validate_schema({ "nome": str, "tipo": str })
-def atualizar(id):
-    return controller.atualizar(id)
-
-@bp_categorias.route('/<int:id>', methods=['DELETE'])
-@jwt_required
-def deletar(id):
-    return controller.deletar(id)
+categoria_router = CategoriaRouter()
+bp_categorias = categoria_router.bp

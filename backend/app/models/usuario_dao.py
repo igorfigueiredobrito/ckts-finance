@@ -9,30 +9,37 @@ class UsuarioDAO(InterfaceDAO):
     """
 
     def criar(self, data: dict) -> int:
-        """
-        Insere um novo usuário e retorna seu ID gerado automaticamente.
-        """
         sql = """
-            INSERT INTO usuarios (nome, email, senha, foto_perfil)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO usuarios (nome, email, senha, foto_perfil, telefone, cpf, data_nascimento)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
         """
         with self.db.cursor() as cursor:
             cursor.execute(sql, (
                 data.get('nome'), 
                 data.get('email'), 
                 data.get('senha'), 
-                data.get('foto_perfil')
+                data.get('foto_perfil'),
+                data.get('telefone'),
+                data.get('cpf'),
+                data.get('data_nascimento')
             ))
+            self.db.commit()
             return cursor.lastrowid
 
-    def ler(self, id: int) -> Optional[dict]:
+    def ler(self, id: int, **kwargs) -> Optional[dict]:
         """
         Retorna os dados do usuário a partir da sua Chave Primária (id).
         """
-        sql = "SELECT id, nome, email, foto_perfil, created_at FROM usuarios WHERE id = %s"
+        sql = "SELECT id, nome, email, foto_perfil, created_at, role, status, telefone, cpf, data_nascimento FROM usuarios WHERE id = %s"
         with self.db.cursor() as cursor:
             cursor.execute(sql, (id,))
-            return cursor.fetchone()
+            usuario = cursor.fetchone()
+            
+            # Formatação de data para o front se existir
+            if usuario and usuario.get('data_nascimento'):
+                usuario['data_nascimento'] = usuario['data_nascimento'].isoformat()
+                
+            return usuario
 
     def atualizar(self, id: int, data: dict) -> bool:
         """
@@ -53,7 +60,7 @@ class UsuarioDAO(InterfaceDAO):
             ))
             return affected_rows > 0
 
-    def deletar(self, id: int) -> bool:
+    def deletar(self, id: int, **kwargs) -> bool:
         """
         Remove um usuário do sistema em cascata.
         """
@@ -67,7 +74,14 @@ class UsuarioDAO(InterfaceDAO):
         Lista todos os usuários. Neste exemplo não usamos filtros adicionais, 
         mas eles poderiam ser passados via kwargs.
         """
-        sql = "SELECT id, nome, email, foto_perfil, created_at FROM usuarios"
+        # Trazemos o plano ativo mais recente (se houver) via JOIN
+        sql = """
+            SELECT u.id, u.nome, u.email, u.foto_perfil, u.created_at, u.role, u.status,
+                   p.nome as plano_escolhido
+            FROM usuarios u
+            LEFT JOIN usuario_planos up ON u.id = up.usuario_id AND up.status = 'ativo'
+            LEFT JOIN planos p ON up.plano_id = p.id
+        """
         with self.db.cursor() as cursor:
             cursor.execute(sql)
             return cursor.fetchall()
@@ -82,3 +96,10 @@ class UsuarioDAO(InterfaceDAO):
         with self.db.cursor() as cursor:
             cursor.execute(sql, (email,))
             return cursor.fetchone()
+
+    def atualizar_status(self, id: int, status: str) -> bool:
+        """Atualiza o status de um usuário."""
+        sql = "UPDATE usuarios SET status = %s WHERE id = %s"
+        with self.db.cursor() as cursor:
+            affected_rows = cursor.execute(sql, (status, id))
+            return affected_rows > 0

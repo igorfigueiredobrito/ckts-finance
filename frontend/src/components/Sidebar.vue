@@ -6,29 +6,38 @@
     </div>
 
     <nav class="sidebar-nav">
-      <router-link to="/" class="nav-item" exact-active-class="active">
+      <router-link to="/app" class="nav-item" exact-active-class="active">
         <LayoutDashboardIcon size="20" />
         <span>Dashboard</span>
       </router-link>
-      <router-link to="/transacoes" class="nav-item" active-class="active">
+      <router-link to="/app/transacoes" class="nav-item" active-class="active">
         <ReceiptIcon size="20" />
         <span>Transações</span>
       </router-link>
-      <router-link to="/categorias" class="nav-item" active-class="active">
+      <router-link to="/app/categorias" class="nav-item" active-class="active">
         <TagsIcon size="20" />
         <span>Categorias</span>
       </router-link>
-      <router-link to="/graficos" class="nav-item" active-class="active">
+      <router-link to="/app/graficos" class="nav-item" active-class="active">
         <PieChartIcon size="20" />
         <span>Gráficos</span>
       </router-link>
-      <router-link to="/data" class="nav-item" active-class="active">
+      <router-link to="/app/data" class="nav-item" active-class="active">
         <DownloadCloudIcon size="20" />
         <span>Importar/Exportar</span>
       </router-link>
-      <router-link to="/perfil" class="nav-item" active-class="active">
+      <router-link to="/app/assinatura" class="nav-item" active-class="active">
+        <AwardIcon size="20" />
+        <span>Minha Assinatura</span>
+      </router-link>
+      <router-link to="/app/perfil" class="nav-item" active-class="active">
         <UserIcon size="20" />
         <span>Meu Perfil</span>
+      </router-link>
+
+      <router-link v-if="userRole === 'admin'" to="/app/admin" class="nav-item" active-class="active">
+        <ShieldIcon size="20" />
+        <span>Administração</span>
       </router-link>
     </nav>
 
@@ -42,6 +51,7 @@
 </template>
 
 <script setup>
+import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { 
   LayoutDashboardIcon, 
@@ -51,10 +61,24 @@ import {
   FileTextIcon,
   DownloadCloudIcon,
   UserIcon,
-  TagsIcon
+  TagsIcon,
+  ShieldIcon,
+  AwardIcon
 } from 'lucide-vue-next';
 
 const router = useRouter();
+const userRole = ref('user');
+
+onMounted(() => {
+  try {
+    const user = JSON.parse(localStorage.getItem('user'));
+    if (user && user.role) {
+      userRole.value = user.role;
+    }
+  } catch (e) {
+    // Ignore error
+  }
+});
 
 const logout = () => {
   localStorage.removeItem('token');

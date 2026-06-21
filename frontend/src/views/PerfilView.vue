@@ -14,7 +14,7 @@
         
         <div class="avatar-wrapper">
           <div class="avatar-container" @click="$refs.fileInput.click()">
-            <img v-if="formData.foto_perfil" :src="`http://localhost:5000${formData.foto_perfil}`" alt="Perfil" class="avatar" />
+            <img v-if="formData.foto_perfil" :src="`http://localhost:5001${formData.foto_perfil}`" alt="Perfil" class="avatar" />
             <div v-else class="avatar-placeholder">
               <CameraIcon size="32" class="text-muted" />
             </div>
@@ -34,10 +34,12 @@
         />
       </div>
 
-      <!-- Seção de Dados Pessoais e Segurança -->
-      <div class="glass-panel profile-data-section">
-        <h3>Dados da Conta</h3>
-        <p class="text-muted mb-4">Mantenha suas informações atualizadas.</p>
+      <!-- Coluna da Direita (Dados e Plano) -->
+      <div class="profile-right-column">
+        <!-- Seção de Dados Pessoais e Segurança -->
+        <div class="glass-panel profile-data-section">
+          <h3>Dados da Conta</h3>
+          <p class="text-muted mb-4">Mantenha suas informações atualizadas.</p>
         
         <form @submit.prevent="salvarPerfil" class="perfil-form">
           <div class="form-row">
@@ -79,6 +81,7 @@
         </form>
       </div>
 
+      </div>
     </div>
   </div>
 </template>
@@ -256,7 +259,6 @@ const salvarPerfil = async () => {
 }
 
 .profile-data-section {
-  flex: 1;
   padding: 2rem;
 }
 
@@ -315,6 +317,13 @@ const salvarPerfil = async () => {
 .feedback-msg.error {
   background: var(--danger-light);
   color: var(--danger);
+}
+
+.profile-right-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
 }
 
 @media (max-width: 768px) {

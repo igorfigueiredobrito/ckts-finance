@@ -1,83 +1,55 @@
-# Arquitetura e Fluxo de Requisições
+# Arquitetura e Fluxo do Projeto (ckts finance)
 
-Este documento constitui o guia interno oficial que disseca a estrutura sintática, as decisões arquiteturais e o ciclo de vida sistêmico deste software de Controle Financeiro. O seu propósito é ambientar novos engenheiros sobre as diretrizes do código e como as peças se conversam de forma escalar e modular.
-
----
-
-## Padrão Arquitetural Adotado: MVC Acoplado à Service Layer
-
-Decidimos fugir do clássico — e por vezes frágil — padrão MVC cru. Adoção isolada do MVC frequentemente acaba inchando os `Controllers` com regras de negócios ou permitindo que a `View/Routes` acesse entidades brutas.
-
-Para sanar isso, introduzimos a **Service Layer (Camada de Serviços)**. O fluxo tornou-se mais inteligente:
-1. O **Controller** é burro: Sabe apenas converter HTTP para Python e Python para JSON. 
-2. O **Service** é o cérebro: Processa as regras de negócio intrínsecas ao projeto (ex: calcular totais, vetar valores negativos, autorizar acessos).
-3. O **DAO (Data Access Object)** é o braço forte: Só ele tem autorização formal para tocar as conexões SQL.
+Este documento atua como o mapa fiel da base de código do **ckts finance**, evidenciando como os padrões de projeto exigidos foram estritamente aplicados na nossa arquitetura baseada em Python (Flask).
 
 ---
 
-## O Ciclo de Vida de uma Requisição
+## 🏗 Arquitetura Aplicada (MVC + Service Layer + Router + Middleware)
 
-Qual é o caminho dos dados quando o cliente final clica no botão azul de "Salvar Transação" até ele ser persistido no disco de servidor?
+O projeto foge de lógicas monolíticas (como fat controllers) separando responsabilidades nas seguintes pastas reais:
 
-1. **Frontend (Vue.js)**
-   O usuário preenche os campos num *Glass Modal*. O Javascript intercepta os dados via função assíncrona, verifica superficialmente os preenchimentos e monta o Payload JSON, anexando o *Token JWT* armazenado em `localStorage` nos cabeçalhos da requisição através do Axios.
-   
-2. **Rota / Roteador Flask (`app/routes/`)**
-   A requisição aterrissa em um sub-roteador específico. Nele, decoradores interceptam o pacote de dados primeiro.
-   
-3. **Pátio dos Middlewares**
-   - *Auth Middleware:* Bloqueia ou extrai o JWT, destrinchando o ID e colando no escopo global (`g.usuario_id`).
-   - *Log Middleware:* Monitora de forma passiva o Timestamp e URL para auditoria de tráfego.
-   - *Error Middleware:* Se algo não previsto acontecer do passo 4 em diante, ele amortece e emite JSON polidos sem vazar stack trace ao cliente, salvando o log bruto no MongoDB.
-   
-4. **O Controller (`app/controllers/`)**
-   A função `TransacaoController.criar()` arranca as entranhas JSON e aciona o Service.
-   
-5. **O Service (`app/services/`)**
-   O Service checa as lógicas cruciais. A transação enviada tentou passar R$ -10.00? O service levanta um erro de infraestrutura limpo. Passou nos testes? Ele empurra os dados ao DAO.
-   
-6. **O DAO + Bancos de Dados (`app/models/` + `app/utils/`)**
-   O `TransacaoDAO` recebe o contrato já sanitizado. Ele invoca a string SQL paramétrica via DB Helper (evitando Injections). **Persistência ocorrida no MySQL.** 
-   Logo na linha de baixo, o Service notifica o `mongo_db.py`, armazenando um artefato de histórico de alteração do sistema no Banco Não-Relacional.
-   
-7. **Caminho de Volta (Return JSON)**
-   O Controller empacota tudo na função `jsonify()`. O Axios do Vue.js capta a promessa revolvida (`status 200/201`), exibe o alerta silencioso verde ao usuário e re-renderiza o DOM via reatividade de variáveis do Vue.
+- **`app/routes/` (Router)**: Camada de orquestração de endpoints estruturada em Classes (POO). Associa as URLs HTTP e os Middlewares diretamente aos métodos do Controller. Nenhuma lógica de negócio reside aqui.
+- **`app/controllers/` (Controller)**: Camada de controle (C do MVC) que recebe os dados limpos das requisições (via objetos Flask `request`) e despacha para os serviços. Aqui ocorrem as montagens das respostas HTTP (Status Code, JSON).
+- **`app/services/` (Service Layer)**: Coração do negócio. Toda a inteligência da aplicação está contida aqui (validações de domínio, cálculos, encriptação JWT/Hash, lógica comercial). Esta camada não acessa o banco de dados via SQL direto; invoca o DAO.
+- **`app/models/` (Model / DAO)**: Camada exclusiva para lidar com banco de dados. Contém as Data Access Objects (DAOs). Toda injeção de consulta SQL reside exclusivamente dentro destes arquivos.
+
+### 🧩 Isolamento do Módulo SaaS (Relacionamento N:N)
+Para suportar o relacionamento M:N exigido entre Usuários e Planos sem causar acoplamento destrutivo no fluxo já existente de Transações, arquitetamos um módulo paralelo autossuficiente:
+- **`PlanoDAO`**, **`PlanoService`** e **`PlanoController`**: Este trio opera isolado, lidando com a tabela `planos` e a tabela associativa `usuario_planos`. Quando um usuário troca de plano, nenhuma lógica financeira de transações é afetada. Essa separação demonstra aderência ao Single Responsibility Principle (SRP) e garante que futuras manutenções na mecânica de pagamento/mensalidade não afetem as despesas diárias dos usuários.
 
 ---
 
-## Dicionário de Camadas e Classes
+## 🧬 Implementação da POO e Interfaces Obrigatórias
 
-Um guia rápido da nomenclatura de pastas na nossa aplicação Python:
+Através do módulo `abc` (Abstract Base Classes) do Python nativo (`app/utils/interfaces.py`), estabelecemos um forte contrato de acoplamento (Interface Segregation Principle).
 
-### `/utils/interfaces.py`
-Nossa bússola mor. O Python não possui interfaces nativas explícitas, por isso estendemos o módulo `abc.ABC`. Aqui, o `InterfaceDAO`, `InterfaceService` e `InterfaceController` sentenciam os verbos que qualquer entidade posterior OBRIGATORIAMENTE terá de implementar (criar, ler, listar, etc). É a "garantia de contrato".
+- **`InterfaceDAO`**: Obriga as DAOs filhas a implementarem métodos base para o CRUD (`criar`, `ler`, `atualizar`, `deletar` e `listar`). 
+  - *Filhas implementadoras:* `UsuarioDAO`, `TransacaoDAO`, `CategoriaDAO`.
 
-### `/middlewares/`
-Nossos porteiros sistêmicos.
-- `auth_middleware.py`: Garante as chaves da casa. Decodifica o payload do Token.
-- `log_middleware.py`: Metrifica quanto tempo o request levou a responder para relatórios analíticos de performance.
-- `error_middleware.py`: Capa de super-herói que engole as chamas do sistema. Exceções nativas entram por aqui e viram avisos carinhosos ao Front-End.
+- **`InterfaceController`**: Obriga os controllers a conterem um método genérico `processar_requisicao` de padronização, servindo como classe pai para padronizar todos os receptores do Flask.
+  - *Filhas implementadoras:* `UsuarioController`, `TransacaoController`, `CategoriaController`, `LogController`, `AdminController`, `DataController`.
 
-### `/routes/`
-Agrupamentos (ou Blueprints) focados. Separam fisicamente o domínio `/api/usuarios` de `/api/transacoes`, tornando a injeção na aplicação matriz em `app/__init__.py` extremamente limpa.
-
-### `/controllers/`
-Especialistas em Protocolo. Eles não validam que 1+1=2. Eles apenas checam se o "Verbo HTTP" era de fato um POST, e se o corpo da requisição é interpretável. O resto, eles delegam.
-
-### `/services/`
-A regra corporativa. Arquivos massos que contêm, por exemplo: lógica da geração de XML, verificação minuciosa se um arquivo provindo de upload é genuinamente JSON, hashing de senhas.
-
-### `/models/`
-O acesso cru, frio e direto aos bits no Banco. O DAO (`Data Access Object`) foca em conexões Singleton velozes em pool com queries exatas de CRUD.
+- **`InterfaceService`**: Força a implementação do método `executar_regras_negocio` que assina o contrato da camada de serviço corporativo.
+  - *Filhas implementadoras:* `UsuarioService`, `TransacaoService`, `CategoriaService`, `LogService`, `AdminService`, `DataService`.
 
 ---
 
-## Estratégia Híbrida: O Porquê de MySQL + MongoDB
+## 🛡 Ciclo de Vida da Requisição e os 4 Middlewares Obrigatórios
 
-Adotar bancos de natureza discrepante não foi acaso: foi estratégico.
+O ciclo de vida de uma requisição no backend passa obrigatoriamente por uma "gaiola" de middlewares interceptadores antes mesmo de atingir a porta do Controller. Estes arquivos vivem na pasta `app/middlewares/`.
 
-**MySQL (Banco Relacional)**
-Utilizado para Entidades Fixas. Precisávamos amarrar usuários a dezenas de transações e transações a dezenas de tags. Integridade referencial é fundamental. Restrições como `ON DELETE CASCADE` ou `ON DELETE RESTRICT` só funcionam de fato num banco de escopo relacional rígido.
+### 1. `auth_middleware.py` (Autenticação JWT)
+- **Onde atua**: Em quase 90% das rotas do sistema.
+- **O que faz**: Intercepta a requisição lendo o Header `Authorization`. Verifica a assinatura HMAC do Token JWT. Caso inválido ou expirado, bloqueia o usuário imediatamente com `401 Unauthorized`. Caso válido, popula as variáveis globais de acesso com os dados do assinante para uso nos Controllers.
 
-**MongoDB (NoSQL Document-Oriented)**
-Utilizado para os Bastidores. Auditoria e Logs geram *gigabytes* de detritos não estruturados, empilhando relatórios dinâmicos de erros. Colocar esse tráfego pesado nas costas de tabelas transacionais no MySQL causa lentidão em Join Tables e estouro do DBSpace. Documentos flexíveis em coleções Mongo tornaram o acompanhamento de incidentes imensuravelmente mais ágil.
+### 2. `validation_middleware.py` (Validação de Entrada)
+- **Onde atua**: Rotas de inserção ou alteração que dependam do Payload (Body `POST`, `PUT`, `PATCH`).
+- **O que faz**: Verifica estritamente a integridade e os tipos das chaves do JSON recebido cruzando-as com o dicionário de regras de `schema` passado no decorador. Se tentar enviar uma *string* no lugar de um *inteiro*, o interceptador aborta a rota retornando um `400 Bad Request` detalhado. Evita validações lixo poluidoras nos controllers.
+
+### 3. `log_middleware.py` (Analytics de Tráfego)
+- **Onde atua**: Globalmente, em TODAS as requisições atendidas pela API.
+- **O que faz**: Mede a latência da requisição, extrai o IP de origem, User-Agent, Status de saída e as rotas acionadas. Empacota estes dados estruturalmente e joga em tempo real para a coleção (`request_logs`) do banco de dados **MongoDB** para alimentar as auditorias estatísticas da área administrativa.
+
+### 4. `error_middleware.py` (Captura Global de Exceções)
+- **Onde atua**: Globalmente.
+- **O que faz**: Evita a tradicional "Tela de erro 500 do Flask" que expõe a stack trace. Intercepta qualquer exceção bruta não tratada originária do Service/Database, formata a resposta como um JSON amigável e dispara o stack trace silenciosamente para o MongoDB (`error_logs`), para que somente a equipe técnica consiga rastrear anomalias de execução sem vazar vulnerabilidades ao usuário final.

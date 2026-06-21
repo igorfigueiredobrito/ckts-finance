@@ -17,7 +17,7 @@ class InterfaceDAO(ABC):
         pass
 
     @abstractmethod
-    def ler(self, id: int) -> Optional[dict]:
+    def ler(self, id: int, **kwargs) -> Optional[dict]:
         """Busca um registro específico através do seu ID."""
         pass
 
@@ -27,7 +27,7 @@ class InterfaceDAO(ABC):
         pass
 
     @abstractmethod
-    def deletar(self, id: int) -> bool:
+    def deletar(self, id: int, **kwargs) -> bool:
         """Deleta (ou inativa de forma lógica) um registro, retornando True se houve sucesso."""
         pass
 

@@ -13,19 +13,14 @@
     </div>
 
     <div class="navbar-center">
-      <router-link to="/" class="nav-link">Dashboard</router-link>
-      <router-link to="/transacoes" class="nav-link">Transações</router-link>
-      <router-link to="/graficos" class="nav-link">Gráficos</router-link>
-      <router-link to="/data" class="nav-link">Importação/Exportação</router-link>
+      <router-link to="/app" class="nav-link">Dashboard</router-link>
+      <router-link to="/app/transacoes" class="nav-link">Transações</router-link>
+      <router-link to="/app/graficos" class="nav-link">Gráficos</router-link>
+      <router-link to="/app/data" class="nav-link">Importação/Exportação</router-link>
     </div>
 
     <div class="navbar-right">
-      <div class="status-badge">
-        <div class="status-dot"></div>
-        <span>API online</span>
-      </div>
-      
-      <router-link to="/perfil" class="user-dropdown" style="text-decoration: none;">
+      <router-link to="/app/perfil" class="user-dropdown" style="text-decoration: none;">
         <UserIcon size="18" class="text-muted" />
         <span class="user-name">{{ user.nome ? user.nome.split(' ')[0] : 'Perfil' }}</span>
       </router-link>

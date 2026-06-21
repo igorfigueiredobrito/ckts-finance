@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://localhost:5000/api', // Flask API URL
+  baseURL: 'http://localhost:5001/api', // Flask API URL
   timeout: 10000,
 });
 
@@ -23,7 +23,11 @@ api.interceptors.response.use(
     if (error.response && error.response.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      window.location.href = '/login';
+      
+      // Só redireciona se a rota atual não for de login e a requisição não for para /login
+      if (!window.location.pathname.includes('/login') && !error.config.url.includes('/login')) {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }

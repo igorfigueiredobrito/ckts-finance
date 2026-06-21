@@ -27,7 +27,11 @@ class TransacaoController(InterfaceController):
             filtros = {
                 "descricao": request.args.get('descricao'),
                 "start_date": request.args.get('start_date'),
-                "end_date": request.args.get('end_date')
+                "end_date": request.args.get('end_date'),
+                "min_valor": request.args.get('min_valor'),
+                "max_valor": request.args.get('max_valor'),
+                "categoria_id": request.args.get('categoria_id'),
+                "tipo": request.args.get('tipo')
             }
             resultado = self.service.listar_transacoes(usuario_id, **filtros)
             return jsonify(resultado), 200
@@ -58,3 +62,11 @@ class TransacaoController(InterfaceController):
             return jsonify(resultado), 200
         except ValueError as ve:
             return jsonify({"erro": True, "mensagem": str(ve)}), 403
+
+    def deletar_todas(self):
+        try:
+            usuario_id = g.usuario_id
+            resultado = self.service.deletar_todas(usuario_id)
+            return jsonify(resultado), 200
+        except Exception as e:
+            return jsonify({"erro": True, "mensagem": str(e)}), 500

@@ -20,11 +20,14 @@
         <button class="btn btn-outline" @click="handleExportJSON" title="Exportar tabela atual para JSON">
           <DownloadCloudIcon size="18"/> Exportar Dados JSON
         </button>
-        <button class="btn btn-outline" @click="handleExportXML" title="Baixar histórico de ações no MongoDB em formato XML">
+        <button v-if="isAdmin" class="btn btn-outline" @click="openXmlModal" title="Baixar histórico de ações no MongoDB em formato XML">
           <DatabaseIcon size="18"/> XML de Logs (Mongo)
         </button>
         <button class="btn btn-outline pdf-btn" @click="handleGeneratePDF" title="Gerar Relatório em PDF">
           <FileTextIcon size="18"/> Relatório PDF
+        </button>
+        <button class="btn btn-danger" @click="handleDeleteAll" title="Apagar TODAS as transações do sistema">
+          <TrashIcon size="18"/> Deletar Tudo
         </button>
       </div>
     </div>
@@ -32,23 +35,56 @@
     <!-- Filtros de Pesquisa (Consumindo a Flask API dinamicamente) -->
     <div class="filters-panel glass-panel mb-4">
       <form @submit.prevent="applyFilters" class="filters-row">
-        <div class="form-group flex-2">
-          <label>Buscar por Descrição</label>
-          <input type="text" v-model="filters.descricao" class="form-control" placeholder="Digite para buscar..." />
+        <!-- Primeira linha de filtros -->
+        <div class="filters-group">
+          <div class="form-group flex-2">
+            <label>Descrição</label>
+            <input type="text" v-model="filters.descricao" class="form-control" placeholder="Buscar por descrição..." />
+          </div>
+          <div class="form-group flex-1">
+            <label>Valor Mín.</label>
+            <input type="number" step="0.01" v-model="filters.min_valor" class="form-control" placeholder="Ex: 10.00" />
+          </div>
+          <div class="form-group flex-1">
+            <label>Valor Máx.</label>
+            <input type="number" step="0.01" v-model="filters.max_valor" class="form-control" placeholder="Ex: 150.00" />
+          </div>
+          <div class="form-group flex-1">
+            <label>Tipo</label>
+            <select v-model="filters.tipo" class="form-control">
+              <option value="">Todos</option>
+              <option value="receita">Receita</option>
+              <option value="despesa">Despesa</option>
+            </select>
+          </div>
         </div>
-        <div class="form-group flex-1">
-          <label>Data Início</label>
-          <input type="date" v-model="filters.start_date" class="form-control" />
+
+        <!-- Segunda linha de filtros -->
+        <div class="filters-group">
+          <div class="form-group flex-2">
+            <label>Categoria</label>
+            <select v-model="filters.categoria_id" class="form-control">
+              <option value="">Todas as categorias</option>
+              <option v-for="cat in categorias" :key="cat.id" :value="cat.id">
+                {{ cat.nome }} ({{ cat.tipo === 'receita' ? 'Receita' : 'Despesa' }})
+              </option>
+            </select>
+          </div>
+          <div class="form-group flex-1">
+            <label>Data Início</label>
+            <input type="date" v-model="filters.start_date" class="form-control" />
+          </div>
+          <div class="form-group flex-1">
+            <label>Data Fim</label>
+            <input type="date" v-model="filters.end_date" class="form-control" />
+          </div>
         </div>
-        <div class="form-group flex-1">
-          <label>Data Fim</label>
-          <input type="date" v-model="filters.end_date" class="form-control" />
-        </div>
-        <div class="filters-actions">
+
+        <div class="filters-actions" style="width: 100%; display: flex; justify-content: flex-end; margin-top: 0.5rem;">
           <button type="submit" class="btn btn-primary">
             <SearchIcon size="18" /> Filtrar
           </button>
-          <button type="button" class="btn btn-outline" @click="clearFilters">Limpar</button>
+          <button type="button" class="btn btn-outline" @click="clearFilters">Limpar Filtros</button>
         </div>
       </form>
     </div>
@@ -75,7 +111,7 @@
           <tr v-if="loading"><td colspan="5" class="text-center py-4">Carregando dados...</td></tr>
           <tr v-else-if="transacoes.length === 0"><td colspan="5" class="text-center py-4 text-muted">Nenhuma transação encontrada para estes filtros.</td></tr>
           
-          <tr v-for="t in transacoes" :key="t.id" class="table-row">
+          <tr v-for="t in paginatedTransacoes" :key="t.id" class="table-row">
             <td class="font-medium">{{ t.descricao }}</td>
             <td class="text-muted">{{ formatDate(t.data) }}</td>
             <td>
@@ -97,6 +133,13 @@
           </tr>
         </tbody>
       </table>
+    </div>
+
+    <!-- Controles de Paginação -->
+    <div v-if="totalPages > 1" class="pagination-controls glass-panel mt-4">
+      <button class="btn btn-outline btn-sm" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Anterior</button>
+      <span class="pagination-info">Página <strong>{{ currentPage }}</strong> de <strong>{{ totalPages }}</strong> ({{ transacoes.length }} registros)</span>
+      <button class="btn btn-outline btn-sm" :disabled="currentPage === totalPages" @click="changePage(currentPage + 1)">Próxima</button>
     </div>
 
     <!-- Modal Form (Glassmorphism Modal) -->
@@ -148,6 +191,53 @@
         </form>
       </div>
     </div>
+
+    <!-- Modal Form: Confirmação de Deletar Tudo -->
+    <div v-if="isDeleteAllModalOpen" class="modal-backdrop" @click.self="isDeleteAllModalOpen = false">
+      <div class="glass-panel modal-content animate-fade-in" style="max-width: 450px; text-align: center;">
+        <h3 class="modal-title" style="color: var(--danger); margin-bottom: 1rem;">⚠️ Excluir TUDO?</h3>
+        <p class="text-muted" style="line-height: 1.5;">Você está prestes a apagar <strong>todas</strong> as suas transações. Esta ação não poderá ser desfeita e você perderá todo o histórico.</p>
+        <p class="text-muted" style="line-height: 1.5; margin-top: 0.5rem;">Tem certeza absoluta que deseja prosseguir?</p>
+        
+        <div class="modal-actions" style="justify-content: center; border-top: none; margin-top: 1.5rem; padding-top: 0;">
+          <button type="button" class="btn btn-outline" @click="isDeleteAllModalOpen = false">Cancelar</button>
+          <button type="button" class="btn btn-danger" @click="confirmDeleteAll">Sim, Excluir Tudo</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Form: Exportar XML -->
+    <div v-if="isXmlModalOpen" class="modal-backdrop" @click.self="closeXmlModal">
+      <div class="glass-panel modal-content animate-fade-in">
+        <h3 class="modal-title">Exportar Logs de Auditoria</h3>
+        <p class="text-muted" style="margin-bottom: 1.5rem;">Filtre os eventos que deseja exportar. Deixe em branco para exportar tudo.</p>
+        
+        <form @submit.prevent="handleExportXML">
+          <div class="form-group">
+            <label>Filtrar por Usuário (ID ou E-mail)</label>
+            <input type="text" v-model="xmlFilters.usuario" class="form-control" placeholder="Ex: 1 ou admin@..." />
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label>Data Início</label>
+              <input type="date" v-model="xmlFilters.data_inicio" class="form-control" />
+            </div>
+            <div class="form-group flex-1">
+              <label>Data Fim</label>
+              <input type="date" v-model="xmlFilters.data_fim" class="form-control" />
+            </div>
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" class="btn btn-outline" @click="closeXmlModal">Cancelar</button>
+            <button type="submit" class="btn btn-primary" :disabled="isExportingXml">
+              {{ isExportingXml ? 'Gerando...' : 'Baixar Arquivo XML' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -159,13 +249,28 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 // --- State ---
+const isAdmin = computed(() => {
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  return user.role === 'admin';
+});
+
 const transacoes = ref([]);
 const categorias = ref([]);
 const loading = ref(true);
 const isModalOpen = ref(false);
+const isDeleteAllModalOpen = ref(false);
+const isXmlModalOpen = ref(false);
 const isSubmitting = ref(false);
+const isExportingXml = ref(false);
 const formError = ref('');
 const feedback = ref({ type: '', message: '' });
+
+// Filtros para exportação XML
+const xmlFilters = ref({ usuario: '', data_inicio: '', data_fim: '' });
+
+// --- Paginação ---
+const currentPage = ref(1);
+const itemsPerPage = 10;
 
 // modalTipo define se estamos adicionando/editando uma 'receita' ou 'despesa'
 const modalTipo = ref('despesa'); 
@@ -174,12 +279,29 @@ const initialForm = { id: null, descricao: '', valor: '', data: '', categoria_id
 const formData = ref({ ...initialForm });
 
 // Objeto de Filtros reativo
-const filters = ref({ descricao: '', start_date: '', end_date: '' });
+const filters = ref({ descricao: '', start_date: '', end_date: '', min_valor: '', max_valor: '', categoria_id: '', tipo: '' });
 
 // Computed Property para filtrar categorias no Dropdown
 const categoriasFiltradas = computed(() => {
   return categorias.value.filter(cat => cat.tipo === modalTipo.value);
 });
+
+// --- Paginação Computada ---
+const totalPages = computed(() => {
+  return Math.ceil(transacoes.value.length / itemsPerPage);
+});
+
+const paginatedTransacoes = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage;
+  const end = start + itemsPerPage;
+  return transacoes.value.slice(start, end);
+});
+
+const changePage = (page) => {
+  if (page >= 1 && page <= totalPages.value) {
+    currentPage.value = page;
+  }
+};
 
 // --- Lifecycle & Fetch ---
 const loadTransacoes = async () => {
@@ -209,11 +331,13 @@ onMounted(() => {
 });
 
 const applyFilters = () => { 
+  currentPage.value = 1;
   loadTransacoes(); 
 };
 
 const clearFilters = () => {
-  filters.value = { descricao: '', start_date: '', end_date: '' };
+  filters.value = { descricao: '', start_date: '', end_date: '', min_valor: '', max_valor: '', categoria_id: '', tipo: '' };
+  currentPage.value = 1;
   loadTransacoes();
 };
 
@@ -299,6 +423,25 @@ const handleDelete = async (id) => {
   }
 };
 
+const handleDeleteAll = () => {
+  if (transacoes.value.length === 0) {
+    showFeedback('error', 'Aviso: Não há transações para excluir.');
+    return;
+  }
+  isDeleteAllModalOpen.value = true;
+};
+
+const confirmDeleteAll = async () => {
+  try {
+    const res = await api.delete('/transacoes/all');
+    showFeedback('success', res.data.mensagem || '🗑️ Todas as transações apagadas!');
+    isDeleteAllModalOpen.value = false;
+    loadTransacoes();
+  } catch (error) {
+    showFeedback('error', 'Falha ao excluir base de transações.');
+  }
+};
+
 // --- Import / Export Actions ---
 const handleExportJSON = async () => {
   try {
@@ -307,11 +450,43 @@ const handleExportJSON = async () => {
   } catch (err) { showFeedback('error', 'Erro na exportação JSON.'); }
 };
 
+const openXmlModal = () => { 
+  xmlFilters.value = { usuario: '', data_inicio: '', data_fim: '' };
+  isXmlModalOpen.value = true; 
+};
+const closeXmlModal = () => { isXmlModalOpen.value = false; };
+
 const handleExportXML = async () => {
+  isExportingXml.value = true;
   try {
-    const res = await api.get('/data/export/logs/xml', { responseType: 'blob' });
-    downloadBlob(res.data, 'auditoria_mongodb.xml');
-  } catch (err) { showFeedback('error', 'Erro na exportação XML.'); }
+    // Monta a query string removendo campos vazios
+    const params = {};
+    if (xmlFilters.value.usuario) params.usuario = xmlFilters.value.usuario;
+    if (xmlFilters.value.data_inicio) params.data_inicio = xmlFilters.value.data_inicio;
+    if (xmlFilters.value.data_fim) params.data_fim = xmlFilters.value.data_fim;
+
+    const res = await api.get('/logs/exportar', { 
+      params,
+      responseType: 'blob' 
+    });
+    
+    downloadBlob(res.data, 'logs.xml');
+    showFeedback('success', '✅ Download do XML de Logs iniciado!');
+    closeXmlModal();
+  } catch (err) { 
+    // Tratar erro quando o responseType é blob
+    let errorMsg = 'Erro na exportação XML. Você tem permissão de Admin?';
+    if (err.response && err.response.data && err.response.data instanceof Blob) {
+        try {
+            const text = await err.response.data.text();
+            const json = JSON.parse(text);
+            if (json.mensagem) errorMsg = json.mensagem;
+        } catch (e) { /* ignore */ }
+    }
+    showFeedback('error', errorMsg); 
+  } finally {
+    isExportingXml.value = false;
+  }
 };
 
 const handleImport = async (event) => {
@@ -455,15 +630,20 @@ const downloadBlob = (blob, filename) => {
 
 .filters-row {
   display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.filters-group {
+  display: flex;
   align-items: flex-end;
   gap: 1rem;
-  flex-wrap: wrap;
+  width: 100%;
 }
 
 .filters-actions {
   display: flex;
   gap: 0.5rem;
-  margin-bottom: 0.25rem;
 }
 
 .btn-outline {
@@ -522,4 +702,21 @@ const downloadBlob = (blob, filename) => {
 .alert { padding: 1rem 1.25rem; border-radius: 12px; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; font-weight: 500; }
 .success { background: var(--primary-light); border: 1px solid var(--primary-light); color: var(--primary-hover); }
 .error, .alert-error { background: var(--danger-light); border: 1px solid var(--danger-light); color: var(--danger); }
+
+/* Paginação */
+.pagination-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 1rem;
+}
+.pagination-info {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+.btn-sm {
+  padding: 0.35rem 0.85rem;
+  font-size: 0.85rem;
+}
 </style>

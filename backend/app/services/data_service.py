@@ -3,7 +3,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 from app.utils.interfaces import InterfaceService
 from app.services.transacao_service import TransacaoService
-from app.utils.mongo_db import mongo_instance, registrar_auditoria
+from app.utils.mongo_db import mongo_instance
 
 class DataService(InterfaceService):
     """
@@ -58,8 +58,7 @@ class DataService(InterfaceService):
                 # Armazena o erro para devolver no feedback final
                 erros_no_lote.append({"indice": idx, "motivo": str(e)})
 
-        # Log do evento massivo no MongoDB
-        registrar_auditoria("IMPORTACAO_LOTE", "transacoes", importados_com_sucesso, usuario_id)
+        # O log de auditoria agora é feito individualmente dentro de transacao_service.criar_transacao
         
         return {
             "sucesso": True,
@@ -89,6 +88,7 @@ class DataService(InterfaceService):
                 query["timestamp"] = timestamp_query
 
         # Busca no Mongo (focando na coleção de auditoria)
+        # Atenção: As novas chaves são "data_hora", "usuario", e não há "acao".
         logs = db.auditoria_logs.find(query)
         
         # Usa a lib nativa ElementTree para construir os Nodos do XML
@@ -97,15 +97,27 @@ class DataService(InterfaceService):
         for doc in logs:
             evento = ET.SubElement(root, "evento", id=str(doc.get('_id', '')))
             
-            ET.SubElement(evento, "acao").text = str(doc.get("acao", ""))
+            # A ação agora vem do próprio doc.get("acao")
+            acao = str(doc.get("acao", "DESCONHECIDO"))
+            
+            ET.SubElement(evento, "acao").text = acao
             ET.SubElement(evento, "tabela").text = str(doc.get("tabela", ""))
             ET.SubElement(evento, "registro_id").text = str(doc.get("registro_id", ""))
-            ET.SubElement(evento, "usuario_id").text = str(doc.get("usuario_id", ""))
+            ET.SubElement(evento, "usuario").text = str(doc.get("usuario", ""))
             
+            # Formatação do timestamp
             ts = doc.get("timestamp")
             if ts:
                 ts_str = ts.isoformat() if hasattr(ts, 'isoformat') else str(ts)
                 ET.SubElement(evento, "timestamp").text = ts_str
+
+            # Detalhes (pode conter dados da assinatura, ou valores antigos/novos)
+            detalhes = doc.get("detalhes")
+            if detalhes:
+                try:
+                    ET.SubElement(evento, "detalhes").text = json.dumps(detalhes, ensure_ascii=False)
+                except Exception:
+                    ET.SubElement(evento, "detalhes").text = str(detalhes)
                 
         # Serializa para binário, adicionando a declaração <?xml ...?>
         xml_bytes = ET.tostring(root, encoding="utf-8", xml_declaration=True)

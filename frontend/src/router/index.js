@@ -7,8 +7,28 @@ import GraficosView from '../views/GraficosView.vue';
 import DataModuleView from '../views/DataModuleView.vue';
 import PerfilView from '../views/PerfilView.vue';
 import CategoriasView from '../views/CategoriasView.vue';
+import LandingView from '../views/LandingView.vue';
+import CadastroView from '../views/CadastroView.vue';
+import AdminView from '../views/AdminView.vue';
+import AssinaturaView from '../views/AssinaturaView.vue';
 
 const routes = [
+  {
+    path: '/pricing',
+    name: 'Pricing',
+    component: LandingView,
+    meta: { requiresAuth: false }
+  },
+  {
+    path: '/',
+    redirect: '/login'
+  },
+  {
+    path: '/cadastro',
+    name: 'Cadastro',
+    component: CadastroView,
+    meta: { requiresAuth: false }
+  },
   {
     path: '/login',
     name: 'Login',
@@ -16,7 +36,7 @@ const routes = [
     meta: { requiresAuth: false }
   },
   {
-    path: '/',
+    path: '/app',
     component: Layout,
     meta: { requiresAuth: true },
     children: [
@@ -55,6 +75,18 @@ const routes = [
         name: 'Categorias',
         component: CategoriasView,
         meta: { title: 'Gerenciar Categorias' }
+      },
+      {
+        path: 'assinatura',
+        name: 'Assinatura',
+        component: AssinaturaView,
+        meta: { title: 'Minha Assinatura' }
+      },
+      {
+        path: 'admin',
+        name: 'AdminPanel',
+        component: AdminView,
+        meta: { title: 'Painel Administrativo' }
       }
     ]
   }
@@ -73,6 +105,10 @@ router.beforeEach((to, from, next) => {
     next({ name: 'Login' });
   } else if (to.name === 'Login' && token) {
     next({ name: 'Dashboard' });
+  } else if ((to.name === 'Pricing' || to.name === 'Cadastro') && token) {
+    // Se está logado, podemos mandar pro app se tentar acessar landing/cadastro?
+    // Opcional: next({ name: 'Dashboard' }) ou deixar livre
+    next();
   } else {
     next();
   }

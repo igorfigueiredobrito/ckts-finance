@@ -26,19 +26,25 @@ class TransacaoDAO(InterfaceDAO):
             ))
             return cursor.lastrowid
 
-    def ler(self, id: int) -> Optional[dict]:
+    def ler(self, id: int, **kwargs) -> Optional[dict]:
         """
         Lê uma transação específica e já faz o JOIN (Eager Loading manual)
         para pegar o nome e o tipo da categoria que a transação pertence.
         """
+        usuario_id = kwargs.get('usuario_id')
         sql = """
             SELECT t.*, c.nome as categoria_nome, c.tipo as categoria_tipo
             FROM transacoes t
             LEFT JOIN categorias c ON t.categoria_id = c.id
             WHERE t.id = %s
         """
+        params = [id]
+        if usuario_id:
+            sql += " AND t.usuario_id = %s"
+            params.append(usuario_id)
+            
         with self.db.cursor() as cursor:
-            cursor.execute(sql, (id,))
+            cursor.execute(sql, tuple(params))
             return cursor.fetchone()
 
     def atualizar(self, id: int, data: dict) -> bool:
@@ -62,14 +68,29 @@ class TransacaoDAO(InterfaceDAO):
             ))
             return affected_rows > 0
 
-    def deletar(self, id: int) -> bool:
+    def deletar(self, id: int, **kwargs) -> bool:
         """
         Deleta de forma permanente a transação.
         """
+        usuario_id = kwargs.get('usuario_id')
         sql = "DELETE FROM transacoes WHERE id = %s"
+        params = [id]
+        if usuario_id:
+            sql += " AND usuario_id = %s"
+            params.append(usuario_id)
+            
         with self.db.cursor() as cursor:
-            affected_rows = cursor.execute(sql, (id,))
+            affected_rows = cursor.execute(sql, tuple(params))
             return affected_rows > 0
+
+    def deletar_todas(self, usuario_id: int) -> int:
+        """
+        Deleta de forma permanente todas as transações de um usuário.
+        """
+        sql = "DELETE FROM transacoes WHERE usuario_id = %s"
+        with self.db.cursor() as cursor:
+            affected_rows = cursor.execute(sql, (usuario_id,))
+            return affected_rows
 
     def listar(self, **kwargs) -> List[dict]:
         """
@@ -79,6 +100,10 @@ class TransacaoDAO(InterfaceDAO):
         descricao = kwargs.get('descricao')
         start_date = kwargs.get('start_date')
         end_date = kwargs.get('end_date')
+        min_valor = kwargs.get('min_valor')
+        max_valor = kwargs.get('max_valor')
+        categoria_id = kwargs.get('categoria_id')
+        tipo = kwargs.get('tipo')
         
         sql = """
             SELECT t.*, c.nome as categoria_nome, c.tipo as categoria_tipo
@@ -103,6 +128,22 @@ class TransacaoDAO(InterfaceDAO):
         if end_date:
             sql += " AND t.data <= %s"
             params.append(end_date)
+            
+        if min_valor:
+            sql += " AND t.valor >= %s"
+            params.append(min_valor)
+            
+        if max_valor:
+            sql += " AND t.valor <= %s"
+            params.append(max_valor)
+            
+        if categoria_id:
+            sql += " AND t.categoria_id = %s"
+            params.append(categoria_id)
+            
+        if tipo:
+            sql += " AND c.tipo = %s"
+            params.append(tipo)
             
         sql += " ORDER BY t.data DESC"
         

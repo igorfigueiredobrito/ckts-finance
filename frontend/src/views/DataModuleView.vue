@@ -20,7 +20,7 @@
       </div>
 
       <!-- Exportar Logs (XML) -->
-      <div class="module-card">
+      <div v-if="isAdmin" class="module-card">
         <div class="module-header">
           <FileTextIcon class="module-icon text-primary" size="24" />
           <h3>Logs do Sistema (Auditoria)</h3>
@@ -65,9 +65,14 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import api from '../api/axios';
 import { DownloadCloudIcon, FileTextIcon, UploadCloudIcon } from 'lucide-vue-next';
+
+const isAdmin = computed(() => {
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  return user.role === 'admin';
+});
 
 const loadingJson = ref(false);
 const loadingXml = ref(false);
