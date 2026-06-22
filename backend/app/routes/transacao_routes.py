@@ -33,13 +33,13 @@ class TransacaoRouter:
         )
         
         self.bp.add_url_rule(
-            '/<int:id>', 
+            '/<int:transacao_id>', 
             view_func=jwt_required(self.controller.ler), 
             methods=['GET']
         )
         
         self.bp.add_url_rule(
-            '/<int:id>', 
+            '/<int:transacao_id>', 
             view_func=jwt_required(validate_schema(schema_transacao)(self.controller.atualizar)), 
             methods=['PUT']
         )
@@ -51,7 +51,7 @@ class TransacaoRouter:
         )
         
         self.bp.add_url_rule(
-            '/<int:id>', 
+            '/<int:transacao_id>', 
             view_func=jwt_required(self.controller.deletar), 
             methods=['DELETE']
         )

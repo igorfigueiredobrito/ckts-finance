@@ -63,10 +63,14 @@ class UsuarioDAO(InterfaceDAO):
     def deletar(self, id: int, **kwargs) -> bool:
         """
         Remove um usuário do sistema em cascata.
+        Limpamos as transações do usuário antes para evitar conflito de 
+        RESTRICT na foreign key da categoria durante o cascade do usuário.
         """
-        sql = "DELETE FROM usuarios WHERE id = %s"
+        sql_transacoes = "DELETE FROM transacoes WHERE usuario_id = %s"
+        sql_usuario = "DELETE FROM usuarios WHERE id = %s"
         with self.db.cursor() as cursor:
-            affected_rows = cursor.execute(sql, (id,))
+            cursor.execute(sql_transacoes, (id,))
+            affected_rows = cursor.execute(sql_usuario, (id,))
             return affected_rows > 0
 
     def listar(self, **kwargs) -> List[dict]:
